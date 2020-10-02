@@ -132,6 +132,14 @@
     deprecation (assoc :deprecated deprecation)
     _parent     (assoc :members (->> _parent (sort-by :field/name) parse-union-fields))))
 
+(defn ^:prvate parse-scalar
+  [{:keys [type/doc type/deprecation lacinia/parse lacinia/serialize] :as opts}]
+  (cond-> {}
+          doc         (assoc :description doc)
+          deprecation (assoc :deprecated deprecation)
+          parse       (assoc :parse parse)
+          serialize   (assoc :serialize serialize)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn ^:private reduce-type-fields
@@ -161,6 +169,12 @@
   (assoc m
          (->PascalCaseKeyword name)
          (parse-union t)))
+
+(defn ^:private reduce-scalars
+  [m {:keys [type/name] :as t}]
+  (assoc m
+    (->PascalCaseKeyword name)
+    (parse-scalar t)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -192,7 +206,8 @@
              (not [?e :lacinia/query true])
              (not [?e :lacinia/mutation true])
              (not [?e :lacinia/subscription true])
-             (not [?e :lacinia/input true])]
+             (not [?e :lacinia/input true])
+             (not [?e :lacinia/scalar true])]
     :reducer reduce-type}
 
    :interfaces
@@ -218,7 +233,7 @@
              [?e :lacinia/tag true]
              [?e :type/nature :user]]
     :reducer reduce-type}
-   
+
    :queries
    {:where '[[?e :lacinia/query true]
              [?e :lacinia/tag true]
@@ -235,7 +250,13 @@
    {:where '[[?e :lacinia/subscription true]
              [?e :lacinia/tag true]
              [?e :type/nature :user]]
-    :reducer reduce-type-fields}})
+    :reducer reduce-type-fields}
+
+   :scalars
+   {:where '[[?e :lacinia/scalar true]
+             [?e :lacinia/tag true]
+             [?e :type/nature :user]]
+    :reducer reduce-scalars}})
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -261,10 +282,16 @@
                '[^{:lacinia/tag true}
                  default
 
+                 ^{:lacinia/scalar true
+                   :lacinia/parse :date-time-parser
+                   :lacinia/serialize :date-time-serializer}
+                 DateTime []
+
                  ^{:doc "A physical or virtual board game."}
                  BoardGame
                  [^ID id
                   ^String name
+                  ^DateTime created_at
                   ^{:type String
                     :optional true
                     :doc "A one-line summary of the game."}
@@ -306,7 +333,7 @@
                  ^:lacinia/input
                  PlayerInput
                  [^String name]
-                 
+
                  ^:lacinia/query
                  QueryRoot
                  [^{:type BoardGame
